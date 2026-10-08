@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LevConnect | Plataforma CRM e Vendas Omnichannel - Lojas Lev</title>
+  
+  <!-- Modern Google Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons for Retail & Chat UI -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Custom Design System -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       Top Navigation & Control Bar
+       ========================================================================= -->
+  <header class="app-header" id="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-logo-badge">
+        <i class="fa-solid fa-layer-group"></i>
+      </div>
+      <div class="brand-text-block">
+        <div class="brand-title">
+          LevConnect
+          <span class="brand-tag">MVP Omnichannel</span>
+        </div>
+        <div class="brand-subtitle">Lojas Lev • Varejo Regional Conectado</div>
+      </div>
+    </div>
+
+    <!-- Center Info: Filiais & WhatsApp API Status -->
+    <div class="header-center-info">
+      <div class="store-selector-group">
+        <span class="store-label"><i class="fa-solid fa-store"></i> Filial Ativa:</span>
+        <select class="store-select" id="header-store-select">
+          <option value="Charqueadas" selected>Charqueadas (Matriz/Piloto)</option>
+          <option value="Minas do Leão">Minas do Leão</option>
+          <option value="Encruzilhada do Sul">Encruzilhada do Sul</option>
+          <option value="Pantâno Grande">Pantâno Grande</option>
+          <option value="Rio Pardo">Rio Pardo</option>
+        </select>
+      </div>
+
+      <div class="api-status-pill" title="Webhook e API Oficial WhatsApp Business sincronizados em tempo real">
+        <span class="pulse-dot"></span>
+        <i class="fa-brands fa-whatsapp"></i> WhatsApp Cloud API Ativa
+      </div>
+    </div>
+
+    <!-- Right Header Actions -->
+    <div class="header-actions">
+      <button class="btn-icon-text" id="btn-open-simulator" title="Testar recebimento de mensagens e fluxo de clientes">
+        <i class="fa-solid fa-robot" style="color: #818cf8;"></i>
+        <span>Simular WhatsApp</span>
+      </button>
+
+      <button class="btn-icon-text" id="btn-open-dashboard" title="Métricas de tempo de resposta e conversão">
+        <i class="fa-solid fa-chart-pie" style="color: #38bdf8;"></i>
+        <span>Dashboard Gerencial</span>
+      </button>
+
+      <button class="btn-icon-text btn-primary" id="btn-header-new-res">
+        <i class="fa-solid fa-plus"></i>
+        <span>Nova Reserva</span>
+      </button>
+
+      <div class="seller-profile-badge">
+        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80" alt="Mariana" class="seller-avatar">
+        <div class="seller-info">
+          <span class="seller-name">Mariana Santos</span>
+          <span class="seller-role">Charqueadas • Online</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Main 3-Column Omnichannel Cockpit
+       ========================================================================= -->
+  <main class="cockpit-container" id="cockpit-container">
+    
+    <!-- =======================================================================
+         COLUMN 1: Caixa de Entrada & Triagem de Atendimentos
+         ======================================================================= -->
+    <section class="inbox-column" id="inbox-column">
+      <div class="inbox-header">
+        <div class="inbox-title-row">
+          <span class="inbox-title">
+            <i class="fa-regular fa-comments" style="color: #818cf8;"></i>
+            Atendimentos
+          </span>
+          <span class="inbox-counter" id="inbox-total-counter">4 conversas</span>
+        </div>
+
+        <div class="search-box-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" class="inbox-search-input" id="input-search-chats" placeholder="Buscar por cliente ou telefone...">
+        </div>
+
+        <div class="inbox-filters" id="inbox-status-filters">
+          <button class="filter-chip active" data-status="all">Todos</button>
+          <button class="filter-chip" data-status="open">Abertos</button>
+          <button class="filter-chip" data-status="in_progress">Em Atendimento</button>
+          <button class="filter-chip" data-status="reserved">Reservados</button>
+          <button class="filter-chip" data-status="closed">Finalizados</button>
+        </div>
+      </div>
+
+      <!-- Chats List -->
+      <div class="chats-scroll-list" id="chats-list-container">
+        <!-- Rendered dynamically by chat.js -->
+      </div>
+
+      <div class="inbox-footer">
+        <button class="btn-simulator-trigger" id="btn-quick-simulate">
+          <i class="fa-solid fa-bolt"></i> Simular Nova Mensagem WhatsApp
+        </button>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         COLUMN 2: Atendimento WhatsApp & Troca de Mensagens
+         ======================================================================= -->
+    <section class="chat-column" id="chat-column">
+      <!-- Chat Header -->
+      <div class="chat-header" id="active-chat-header">
+        <div class="chat-header-user">
+          <img src="" alt="Cliente" class="chat-header-avatar" id="chat-avatar-current">
+          <div class="chat-header-details">
+            <div class="chat-header-name">
+              <span id="chat-customer-name-display">Carregando...</span>
+              <span class="tag-vip-customer" id="chat-vip-tag" style="display: none;">VIP</span>
+            </div>
+            <div class="chat-header-meta">
+              <span id="chat-customer-phone-display">(51) 99999-9999</span>
+              <span>•</span>
+              <span id="chat-customer-city-display">Charqueadas</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-header-actions">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600;">Status:</span>
+            <select class="select-chat-status" id="select-active-chat-status">
+              <option value="open">Aberto (Aguardando)</option>
+              <option value="in_progress">Em Atendimento</option>
+              <option value="reserved">Reserva Gerada</option>
+              <option value="closed">Finalizado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Feed -->
+      <div class="messages-container" id="chat-messages-feed">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Quick Reply Prompts -->
+      <div class="quick-replies-section">
+        <span class="quick-reply-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Respostas Rápidas:</span>
+        <button class="quick-reply-pill" data-reply="Consultando o estoque nas 5 lojas em tempo real... Um instante!">
+          📦 "Consultando estoque nas 5 lojas..."
+        </button>
+        <button class="quick-reply-pill" data-reply="Encontrei! Temos essa peça disponível para reserva. Deseja que eu reserve para você provar na loja?">
+          ✨ "Peça disponível para reserva"
+        </button>
+        <button class="quick-reply-pill" data-reply="Essa numeração esgotou aqui, mas temos na outra filial! Podemos transferir sem custo para você retirar.">
+          🚚 "Transferência inter-lojas"
+        </button>
+        <button class="quick-reply-pill" data-reply="Sua reserva foi gerada com sucesso! Você tem 48 horas para passar na loja física, provar e pagar.">
+          🎟️ "Voucher gerado (48h)"
+        </button>
+      </div>
+
+      <!-- Message Composer -->
+      <form class="chat-composer" id="form-chat-composer">
+        <button type="button" class="btn-composer-tool" id="btn-attach-catalog-product" title="Inserir produto do catálogo no chat">
+          <i class="fa-solid fa-shirt"></i>
+        </button>
+        
+        <input type="text" class="input-composer-message" id="input-composer-text" placeholder="Digite sua resposta para o cliente no WhatsApp..." autocomplete="off">
+
+        <button type="submit" class="btn-send-message" id="btn-composer-submit" title="Enviar mensagem">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </form>
+    </section>
+
+    <!-- =======================================================================
+         COLUMN 3: Cockpit de Ação & Gestão (Ficha Cliente, Estoque, Reservas)
+         ======================================================================= -->
+    <aside class="action-column" id="action-column">
+      <!-- Tabs Switcher -->
+      <nav class="action-tabs-nav">
+        <button class="action-tab-btn active" data-tab="tab-customer">
+          <i class="fa-regular fa-id-badge"></i>
+          Ficha Cliente
+        </button>
+        <button class="action-tab-btn" data-tab="tab-stock">
+          <i class="fa-solid fa-boxes-stacked"></i>
+          Estoque 5 Filiais
+        </button>
+        <button class="action-tab-btn" data-tab="tab-reservations">
+          <i class="fa-solid fa-clipboard-check"></i>
+          Reservas
+          <span class="tab-badge" id="tab-res-badge">0</span>
+        </button>
+      </nav>
+
+      <div class="action-tabs-content">
+        <!-- ===================================================================
+             TAB 1: Ficha Inteligente do Cliente (CRM de Moda)
+             =================================================================== -->
+        <div class="tab-panel active" id="tab-customer">
+          <div class="customer-summary-card">
+            <div class="customer-profile-header">
+              <img src="" alt="Cliente" class="customer-big-avatar" id="crm-customer-avatar">
+              <div>
+                <div class="customer-name-heading">
+                  <span id="crm-customer-name">Juliana Silveira</span>
+                  <span class="tag-vip-customer" id="crm-vip-badge" style="display:none;">VIP</span>
+                </div>
+                <div class="customer-contact-text" id="crm-customer-phone">(51) 99842-1209</div>
+                <div class="customer-contact-text" style="color: #818cf8; font-weight: 600; margin-top: 2px;">
+                  <i class="fa-solid fa-location-dot"></i> Loja habitual: <span id="crm-customer-store">Charqueadas</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="customer-kpi-row">
+              <div class="customer-kpi-item">
+                <span class="customer-kpi-label">Compras Realizadas</span>
+                <span class="customer-kpi-val" id="crm-total-purchases">8 pedidos</span>
+              </div>
+              <div class="customer-kpi-item">
+                <span class="customer-kpi-label">Valor Vitalício (LTV)</span>
+                <span class="customer-kpi-val" id="crm-ltv-value" style="color: #34d399;">R$ 2.450,00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grade de Medidas / Tamanhos do Cliente -->
+          <div class="form-group">
+            <div class="section-title-row">
+              <span class="section-title">
+                <i class="fa-solid fa-ruler-combined" style="color: #818cf8;"></i> Grade de Medidas do Cliente
+              </span>
+              <span style="font-size: 0.68rem; color: var(--text-dim);">Usado na triagem rápida</span>
+            </div>
+
+            <div class="sizes-measure-grid">
+              <div class="size-measure-box">
+                <span class="size-type-title">Calçado</span>
+                <input type="text" class="size-input-field" id="crm-input-shoe-size" value="37" placeholder="Ex: 37">
+              </div>
+
+              <div class="size-measure-box">
+                <span class="size-type-title">Roupa Top</span>
+                <input type="text" class="size-input-field" id="crm-input-top-size" value="M" placeholder="P/M/G">
+              </div>
+
+              <div class="size-measure-box">
+                <span class="size-type-title">Roupa Bottom</span>
+                <input type="text" class="size-input-field" id="crm-input-bottom-size" value="38" placeholder="Ex: 38">
+              </div>
+            </div>
+          </div>
+
+          <!-- Marcas Favoritas -->
+          <div class="form-group">
+            <span class="section-title">
+              <i class="fa-solid fa-heart" style="color: #f43f5e;"></i> Marcas & Preferências
+            </span>
+            <div class="brands-tags-list" id="crm-brands-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Notas e Observações do Vendedor -->
+          <div class="form-group">
+            <span class="section-title">
+              <i class="fa-regular fa-note-sticky" style="color: #fbbf24;"></i> Anotações do Atendimento
+            </span>
+            <textarea class="customer-notes-textarea" id="crm-customer-notes" placeholder="Adicione notas sobre o estilo, preferências ou horários do cliente..."></textarea>
+            <button class="btn-save-customer" id="btn-save-crm-customer">
+              <i class="fa-solid fa-floppy-disk"></i> Atualizar Ficha do Cliente
+            </button>
+          </div>
+
+          <!-- Histórico Recente -->
+          <div class="form-group">
+            <span class="section-title">
+              <i class="fa-solid fa-clock-rotate-left"></i> Últimas Compras nas Lojas Lev
+            </span>
+            <div class="history-items-list" id="crm-history-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================================
+             TAB 2: Estoque Global 5 Filiais (Cross-Store Inventory)
+             =================================================================== -->
+        <div class="tab-panel" id="tab-stock">
+          <div class="stock-search-bar">
+            <input type="text" class="stock-search-input" id="input-stock-search" placeholder="Buscar por produto, SKU, calçado ou vestido...">
+            <div class="stock-category-filters" id="stock-category-filters">
+              <button class="stock-cat-btn active" data-cat="all">Todos</button>
+              <button class="stock-cat-btn" data-cat="Calçados">Calçados</button>
+              <button class="stock-cat-btn" data-cat="Vestuário">Vestuário</button>
+            </div>
+          </div>
+
+          <!-- Products List with 5-Store Matrix -->
+          <div class="products-stock-list" id="products-stock-container">
+            <!-- Rendered dynamically by stock.js -->
+          </div>
+        </div>
+
+        <!-- ===================================================================
+             TAB 3: Ordens de Reserva (Clique e Retire / Inter-Lojas)
+             =================================================================== -->
+        <div class="tab-panel" id="tab-reservations">
+          <div class="res-filter-row">
+            <select class="form-select" id="select-res-status-filter" style="width: 100%;">
+              <option value="all">Todas as Ordens</option>
+              <option value="aguardando_separacao">Aguardando Separação</option>
+              <option value="em_transito">Em Trânsito Inter-Lojas</option>
+              <option value="pronto_retirada">Pronta para Retirada</option>
+              <option value="concluido">Concluídas</option>
+            </select>
+          </div>
+
+          <div class="reservations-container" id="reservations-list-container">
+            <!-- Rendered dynamically by reservations.js -->
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- =========================================================================
+       MODAL: Criar Reserva Inter-Lojas / Clique e Retire
+       ========================================================================= -->
+  <div class="modal-overlay" id="modal-reservation">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i class="fa-solid fa-cart-shopping" style="color: #10b981;"></i>
+          Gerar Ordem de Reserva (Clique e Retire)
+        </h3>
+        <button class="btn-close-modal" data-close="modal-reservation">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Cliente Selecionado:</label>
+          <select class="form-select" id="res-modal-customer-select">
+            <!-- Options populated -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Produto do Catálogo:</label>
+          <select class="form-select" id="res-modal-product-select">
+            <!-- Options populated -->
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-group">
+            <label class="form-label">Numeração / Tamanho:</label>
+            <select class="form-select" id="res-modal-size-select">
+              <!-- Sizes populated -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Filial de Retirada (Onde o cliente busca):</label>
+            <select class="form-select" id="res-modal-pickup-store">
+              <option value="Charqueadas">Charqueadas</option>
+              <option value="Minas do Leão">Minas do Leão</option>
+              <option value="Encruzilhada do Sul">Encruzilhada do Sul</option>
+              <option value="Pantâno Grande">Pantâno Grande</option>
+              <option value="Rio Pardo">Rio Pardo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial de Origem do Estoque (Com saldo disponível):</label>
+          <select class="form-select" id="res-modal-source-store">
+            <!-- Stores with stock populated -->
+          </select>
+        </div>
+
+        <div id="res-transfer-alert-box" style="display: none; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 0.75rem; font-size: 0.8rem; color: #fbbf24;">
+          <i class="fa-solid fa-truck-fast"></i> <strong>Atenção:</strong> Será gerada uma transferência inter-lojas! O malote regional levará a peça até a loja de retirada.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Anotações da Separação:</label>
+          <input type="text" class="form-input" id="res-modal-notes" placeholder="Ex: Cliente vai provar no fim da tarde">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon-text" data-close="modal-reservation">Cancelar</button>
+        <button class="btn-icon-text btn-primary" id="btn-submit-create-reservation">
+          <i class="fa-solid fa-check"></i> Confirmar Reserva & Gerar Voucher
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: Simulador de Interações WhatsApp
+       ========================================================================= -->
+  <div class="modal-overlay" id="modal-simulator">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i class="fa-solid fa-vial-circle-check" style="color: #818cf8;"></i>
+          Simulador de Mensagens WhatsApp
+        </h3>
+        <button class="btn-close-modal" data-close="modal-simulator">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45;">
+          Escolha um dos cenários reais do caso das <strong>Lojas Lev</strong> para demonstrar como o LevConnect resolve a desconexão de estoque e agiliza o atendimento via WhatsApp:
+        </p>
+
+        <div class="scenario-cards-grid">
+          <div class="scenario-card" data-scenario="charqueadas_bota">
+            <div class="scenario-card-top">
+              <span class="scenario-card-title">Cenário 1: Juliana Silveira (Charqueadas)</span>
+              <span class="scenario-tag">Cross-Store</span>
+            </div>
+            <div class="scenario-desc">
+              Pergunta sobre o Coturno 37 (esgotado em Charqueadas, mas com estoque em Minas do Leão e Rio Pardo). Demonstra a reserva inter-lojas imediata sem perder a venda.
+            </div>
+          </div>
+
+          <div class="scenario-card" data-scenario="patricia_novidade">
+            <div class="scenario-card-top">
+              <span class="scenario-card-title">Cenário 2: Patrícia Vargas (Minas do Leão)</span>
+              <span class="scenario-tag">Reserva Local</span>
+            </div>
+            <div class="scenario-desc">
+              Viu story no Instagram da jaqueta biker G e quer reservar para buscar na loja de Minas do Leão hoje.
+            </div>
+          </div>
+
+          <div class="scenario-card" data-scenario="nova_cliente_rio_pardo">
+            <div class="scenario-card-top">
+              <span class="scenario-card-title">Cenário 3: Nova Lead em Rio Pardo</span>
+              <span class="scenario-tag">Novo Chat</span>
+            </div>
+            <div class="scenario-desc">
+              Cliente nova entra em contato pelo Instagram perguntando sobre o Vestido Midi Floral P em Rio Pardo. Cria conversa instantaneamente no cockpit.
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 1rem; margin-top: 0.5rem;">
+          <label class="form-label">Ou envie uma mensagem livre como cliente:</label>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <input type="text" class="form-input" id="input-custom-sim-text" placeholder="Ex: Olá, tem tamanho 38 do tênis casual?">
+            <button class="btn-icon-text btn-primary" id="btn-send-custom-sim">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon-text" data-close="modal-simulator">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: Dashboard Gerencial & KPIs
+       ========================================================================= -->
+  <div class="modal-overlay" id="modal-dashboard">
+    <div class="modal-box" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i class="fa-solid fa-chart-line" style="color: #38bdf8;"></i>
+          Dashboard Gerencial • Lojas Lev
+        </h3>
+        <button class="btn-close-modal" data-close="modal-dashboard">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Key Metrics Cards -->
+        <div class="dashboard-kpi-grid">
+          <div class="dashboard-kpi-card">
+            <span class="dash-kpi-label">Tempo Médio Resposta</span>
+            <span class="dash-kpi-val" id="kpi-avg-response">2.4 min</span>
+            <span class="dash-kpi-sub"><i class="fa-solid fa-arrow-down"></i> -94.6% vs manual (45 min)</span>
+          </div>
+
+          <div class="dashboard-kpi-card">
+            <span class="dash-kpi-label">Taxa de Conversão</span>
+            <span class="dash-kpi-val" id="kpi-conversion" style="color: #34d399;">68.2%</span>
+            <span class="dash-kpi-sub">Mensagem ➔ Reserva</span>
+          </div>
+
+          <div class="dashboard-kpi-card">
+            <span class="dash-kpi-label">Reservas Inter-Lojas</span>
+            <span class="dash-kpi-val" id="kpi-interstore" style="color: #fbbf24;">0</span>
+            <span class="dash-kpi-sub">Evitou perda de vendas</span>
+          </div>
+
+          <div class="dashboard-kpi-card">
+            <span class="dash-kpi-label">Volume Pipeline</span>
+            <span class="dash-kpi-val" id="kpi-pipeline" style="color: #818cf8;">R$ 0,00</span>
+            <span class="dash-kpi-sub">Em reservas ativas</span>
+          </div>
+        </div>
+
+        <!-- Filiais Ranking Table -->
+        <div class="form-group" style="margin-top: 0.5rem;">
+          <span class="section-title">
+            <i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> Performance por Filial (As 5 Lojas da Rede)
+          </span>
+          <table class="custom-table" style="margin-top: 0.5rem;">
+            <thead>
+              <tr>
+                <th>Filial Regional</th>
+                <th>Reservas Geradas</th>
+                <th>Vendedores Ativos</th>
+                <th>Volume Financeiro</th>
+                <th>Status Estoque</th>
+              </tr>
+            </thead>
+            <tbody id="table-stores-ranking-body">
+              <!-- Populated by dashboard.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Grade de Demanda -->
+        <div class="form-group" style="margin-top: 0.5rem;">
+          <span class="section-title">
+            <i class="fa-solid fa-chart-simple" style="color: #a855f7;"></i> Distribuição de Demanda por Numeração de Calçados
+          </span>
+          <div id="demand-bars-container" style="display: flex; gap: 8px; align-items: flex-end; height: 90px; background: var(--bg-card); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border-card);">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon-text" data-close="modal-dashboard">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: Voucher de Retirada (Voucher & Código QR para Balcão)
+       ========================================================================= -->
+  <div class="modal-overlay" id="modal-voucher">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i class="fa-solid fa-ticket" style="color: #818cf8;"></i>
+          Voucher de Retirada • Lojas Lev
+        </h3>
+        <button class="btn-close-modal" data-close="modal-voucher">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <div style="background: white; color: #111827; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+          <div style="font-size: 1.2rem; font-weight: 800; color: #4338ca;">LOJAS LEV</div>
+          <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase; margin-bottom: 1rem;">Comprovante de Reserva Clique & Retire</div>
+          
+          <div style="display: flex; justify-content: center; margin: 1rem 0;">
+            <div style="background: #f3f4f6; padding: 1rem; border-radius: 8px; border: 2px dashed #9ca3af;">
+              <i class="fa-solid fa-qrcode" style="font-size: 5rem; color: #1f2937;"></i>
+            </div>
+          </div>
+
+          <div style="font-family: monospace; font-size: 1.3rem; font-weight: 800; letter-spacing: 2px; color: #1e1b4b;" id="voucher-code-display">
+            #RES-8901
+          </div>
+
+          <div style="margin-top: 1rem; border-top: 1px dashed #d1d5db; padding-top: 0.75rem; font-size: 0.82rem; text-align: left; display: flex; flex-direction: column; gap: 4px;">
+            <div><strong>Cliente:</strong> <span id="voucher-customer-display">-</span></div>
+            <div><strong>Item:</strong> <span id="voucher-item-display">-</span></div>
+            <div><strong>Tamanho:</strong> <span id="voucher-size-display">-</span></div>
+            <div><strong>Valor:</strong> <span id="voucher-price-display">-</span></div>
+            <div><strong>Loja de Retirada:</strong> <span id="voucher-pickup-display">-</span></div>
+            <div><strong>Válido até:</strong> <span id="voucher-expires-display">-</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon-text" data-close="modal-voucher">Fechar</button>
+        <button class="btn-icon-text btn-primary" onclick="window.print()">
+          <i class="fa-solid fa-print"></i> Imprimir Voucher
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Application Logic Scripts -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
