@@ -63,6 +63,19 @@ class LevConnectApp {
       });
     }
 
+    // Auto-activate tab or modal via URL query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam) {
+      const tabBtn = document.querySelector(`.action-tab-btn[data-tab="tab-${tabParam}"]`);
+      if (tabBtn) tabBtn.click();
+    }
+    if (urlParams.get('modal') === 'dashboard') {
+      setTimeout(() => {
+        document.getElementById('btn-open-dashboard')?.click();
+      }, 500);
+    }
+
     // Modal Triggers from Header
     const btnSim = document.getElementById('btn-open-simulator');
     if (btnSim) btnSim.addEventListener('click', () => this.openModal('modal-simulator'));
