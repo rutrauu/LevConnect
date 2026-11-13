@@ -1,6 +1,6 @@
 /**
  * LevConnect - Chat Module
- * WhatsApp Multi-Agent Inbox & Real-time Messaging feed
+ * WhatsApp Multi-Agent Inbox, Real-time Messaging & Lev AI Copilot
  */
 
 import { api } from './api.js';
@@ -66,6 +66,20 @@ export const ChatModule = {
       });
     });
 
+    // Lev AI Copilot trigger button
+    const btnCopilot = document.getElementById('btn-trigger-copilot');
+    if (btnCopilot) {
+      btnCopilot.addEventListener('click', () => this.openCopilotSuggestion());
+    }
+
+    const btnCloseCopilot = document.getElementById('btn-close-copilot');
+    if (btnCloseCopilot) {
+      btnCloseCopilot.addEventListener('click', () => {
+        const drawer = document.getElementById('copilot-drawer');
+        if (drawer) drawer.style.display = 'none';
+      });
+    }
+
     // Chat status dropdown change
     const statusSelect = document.getElementById('select-active-chat-status');
     if (statusSelect) {
@@ -79,6 +93,106 @@ export const ChatModule = {
           console.error(err);
         }
       });
+    }
+  },
+
+  async openCopilotSuggestion() {
+    if (!this.currentChatId) return;
+    const drawer = document.getElementById('copilot-drawer');
+    const body = document.getElementById('copilot-drawer-body');
+    if (!drawer || !body) return;
+
+    drawer.style.display = 'block';
+    body.innerHTML = `
+      <div style="font-size: 0.78rem; color: var(--text-muted); padding: 0.5rem 0;">
+        <i class="fa-solid fa-spinner fa-spin" style="color: #818cf8;"></i> Analisando Ficha de Moda do cliente e estoque em tempo real nas 5 filiais...
+      </div>
+    `;
+
+    try {
+      const activeStore = window.app.StockModule ? window.app.StockModule.activeStore : 'Charqueadas';
+      const sellerName = (window.app.currentSeller && window.app.currentSeller.name) || 'Mariana Santos';
+      const data = await api.getCopilotSuggestion(this.currentChatId, activeStore, sellerName);
+
+      const prim = data.primary_recommendation;
+      const cross = data.cross_sell_recommendation;
+      const cust = data.customer_summary;
+
+      body.innerHTML = `
+        <div class="copilot-cards-row">
+          <div class="copilot-rec-card">
+            <img src="${prim.image}" alt="${prim.name}" class="copilot-thumb">
+            <div style="flex: 1; min-width: 0;">
+              <div class="copilot-card-tag">
+                ${prim.is_inter_store ? `<span style="color:#fbbf24;"><i class="fa-solid fa-truck-fast"></i> Malote de ${prim.source_store}</span>` : `<span style="color:#34d399;"><i class="fa-solid fa-store"></i> Estoque Local (${prim.pickup_store})</span>`}
+              </div>
+              <div class="copilot-prod-title">${prim.name}</div>
+              <div class="copilot-prod-meta">Medida Cliente: <strong>Tam ${prim.size}</strong> • R$ ${prim.price.toFixed(2).replace('.', ',')}</div>
+            </div>
+            <button type="button" class="btn-copilot-action" id="btn-copilot-reserve-prim" title="Abrir reserva já preenchida nesta medida">
+              <i class="fa-solid fa-bolt"></i> Reservar
+            </button>
+          </div>
+
+          <div class="copilot-rec-card">
+            <img src="${cross.image}" alt="${cross.name}" class="copilot-thumb">
+            <div style="flex: 1; min-width: 0;">
+              <div class="copilot-card-tag" style="color: #c084fc;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Sugestão Look Completo (Cross-Sell)
+              </div>
+              <div class="copilot-prod-title">${cross.name}</div>
+              <div class="copilot-prod-meta">Medida Cliente: <strong>Tam ${cross.size}</strong> • R$ ${cross.price.toFixed(2).replace('.', ',')}</div>
+            </div>
+            <button type="button" class="btn-copilot-action secondary" id="btn-copilot-send-cross" title="Enviar card do look complementar no chat">
+              <i class="fa-solid fa-paper-plane"></i> Card
+            </button>
+          </div>
+        </div>
+
+        <div class="copilot-reply-preview">
+          <div style="flex: 1; font-size: 0.76rem; color: #e2e8f0; line-height: 1.4;">
+            ${data.suggested_reply}
+          </div>
+          <button type="button" class="btn-icon-text btn-primary" id="btn-copilot-apply-text" style="white-space: nowrap; font-size: 0.74rem;">
+            <i class="fa-solid fa-check"></i> Usar Resposta
+          </button>
+        </div>
+      `;
+
+      const btnApply = document.getElementById('btn-copilot-apply-text');
+      if (btnApply) {
+        btnApply.addEventListener('click', () => {
+          const inputMsg = document.getElementById('input-composer-text');
+          if (inputMsg) {
+            inputMsg.value = data.suggested_reply;
+            inputMsg.focus();
+          }
+          drawer.style.display = 'none';
+          window.app.showToast('Sugestão do Copiloto IA inserida no campo de mensagem!');
+        });
+      }
+
+      const btnResPrim = document.getElementById('btn-copilot-reserve-prim');
+      if (btnResPrim) {
+        btnResPrim.addEventListener('click', () => {
+          const prodObj = (window.app.StockModule.products || []).find(p => p.id === prim.product_id);
+          drawer.style.display = 'none';
+          window.app.openReservationModalWithProduct(prodObj, prim.size);
+        });
+      }
+
+      const btnSendCross = document.getElementById('btn-copilot-send-cross');
+      if (btnSendCross) {
+        btnSendCross.addEventListener('click', async () => {
+          const prodObj = (window.app.StockModule.products || []).find(p => p.id === cross.product_id);
+          if (prodObj) {
+            await this.sendProductCardToChat(prodObj);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Erro no Copiloto:', err);
+      body.innerHTML = `<div style="color:#f87171; font-size:0.78rem;">Erro ao gerar sugestão inteligente.</div>`;
     }
   },
 
@@ -153,7 +267,6 @@ export const ChatModule = {
       `;
     }).join('');
 
-    // Attach click events
     container.querySelectorAll('.chat-item').forEach(item => {
       item.addEventListener('click', () => {
         const chatId = item.dataset.chatId;
@@ -164,8 +277,10 @@ export const ChatModule = {
 
   async selectChat(chatId) {
     this.currentChatId = chatId;
+
+    const drawer = document.getElementById('copilot-drawer');
+    if (drawer) drawer.style.display = 'none';
     
-    // Update active highlight in list
     document.querySelectorAll('.chat-item').forEach(item => {
       if (item.dataset.chatId === chatId) {
         item.classList.add('active');
@@ -184,7 +299,6 @@ export const ChatModule = {
       this.renderChatHeader(chat, customer);
       this.renderMessagesFeed(chat.messages || []);
 
-      // Notify parent app to update Customer Profile and Stock context
       if (this.onChatSelected && customer) {
         this.onChatSelected(customer, chat);
       }
@@ -282,7 +396,7 @@ export const ChatModule = {
               <img src="${p.image}" alt="${p.name}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover;">
               <div>
                 <div style="font-weight: 700; font-size: 0.82rem;">${p.name}</div>
-                <div style="color: #34d399; font-weight: 800; font-size: 0.85rem;">R$ ${p.price.toFixed(2).replace('.', ',')}</div>
+                <div style="color: #34d399; font-weight: 800; font-size: 0.85rem;">R$ ${Number(p.price).toFixed(2).replace('.', ',')}</div>
               </div>
             </div>
             <div>${msg.text}</div>
@@ -309,7 +423,6 @@ export const ChatModule = {
     feed.innerHTML = html;
     feed.scrollTop = feed.scrollHeight;
 
-    // Attach voucher modal triggers
     feed.querySelectorAll('.btn-voucher-action').forEach(btn => {
       btn.addEventListener('click', () => {
         const resId = btn.dataset.resId;
@@ -332,7 +445,6 @@ export const ChatModule = {
         type: 'text'
       });
 
-      // Reload chat feed
       await this.selectChat(this.currentChatId);
       this.loadChats(false);
     } catch (err) {

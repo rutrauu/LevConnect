@@ -1,6 +1,6 @@
 /**
  * LevConnect - Stock Module
- * Real-time 5-Branch Cross-Store Inventory Lookup (O2O Omnichannel)
+ * Real-time 5-Branch Cross-Store Inventory Lookup & Active VIP Size Campaign
  */
 
 import { api } from './api.js';
@@ -57,7 +57,6 @@ export const StockModule = {
       const data = await api.getProducts(this.selectedCategory, this.searchQuery);
       this.products = data.products || [];
       
-      // Default initial size for each product if not set
       this.products.forEach(p => {
         if (!this.productSelectedSizes[p.id] && p.sizes && p.sizes.length > 0) {
           this.productSelectedSizes[p.id] = p.sizes[0];
@@ -107,7 +106,6 @@ export const StockModule = {
       const selectedSize = this.productSelectedSizes[product.id] || product.sizes[0];
       const localStock = (product.stock[this.activeStore] && product.stock[this.activeStore][selectedSize]) || 0;
       
-      // Find other stores that have stock
       const otherStoresWithStock = stores
         .filter(s => s !== this.activeStore)
         .filter(s => (product.stock[s] && product.stock[s][selectedSize]) > 0);
@@ -184,7 +182,10 @@ export const StockModule = {
           <!-- Card Actions -->
           <div class="product-card-actions">
             <button class="btn-reserve-instant" data-action="reserve" data-product-id="${product.id}" data-size="${selectedSize}">
-              <i class="fa-solid fa-cart-shopping"></i> Reservar Peça (Clique & Retire)
+              <i class="fa-solid fa-cart-shopping"></i> Reservar (${selectedSize})
+            </button>
+            <button class="btn-vip-campaign" data-action="vip-campaign" data-product-id="${product.id}" data-size="${selectedSize}" title="Disparar oferta ativa no WhatsApp para clientes que usam tamanho ${selectedSize}">
+              <i class="fa-solid fa-bullhorn"></i> VIP Tam ${selectedSize}
             </button>
             <button class="btn-send-to-chat" data-action="send-chat" data-product-id="${product.id}" title="Enviar foto e preço no WhatsApp">
               <i class="fa-solid fa-paper-plane"></i>
@@ -194,7 +195,6 @@ export const StockModule = {
       `;
     }).join('');
 
-    // Attach listeners
     container.querySelectorAll('.size-pill-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -211,6 +211,25 @@ export const StockModule = {
         const size = btn.dataset.size;
         const product = this.products.find(p => p.id === pId);
         window.app.openReservationModalWithProduct(product, size);
+      });
+    });
+
+    container.querySelectorAll('[data-action="vip-campaign"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pId = btn.dataset.productId;
+        const size = btn.dataset.size;
+        try {
+          const sellerName = (window.app.currentSeller && window.app.currentSeller.name) || 'Mariana Santos';
+          const res = await api.sendVipCampaign(pId, size, this.activeStore, sellerName);
+          window.app.showToast(`Campanha VIP disparada para ${res.sent_count} cliente(s) que usam tamanho ${size}!`);
+          await window.app.ChatModule.loadChats(false);
+          if (res.notified && res.notified.length > 0) {
+            await window.app.ChatModule.selectChat(res.notified[0].chat_id);
+          }
+        } catch (err) {
+          console.error(err);
+          window.app.showToast('Erro ao disparar campanha VIP', 'error');
+        }
       });
     });
 

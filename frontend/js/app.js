@@ -17,10 +17,29 @@ class LevConnectApp {
     this.CustomerModule = CustomerModule;
     this.ReservationsModule = ReservationsModule;
     this.DashboardModule = DashboardModule;
+    this.sellers = [];
+    this.currentSeller = {
+      id: 'SEL-01',
+      name: 'Mariana Santos',
+      store: 'Charqueadas',
+      role: 'Vendedora Digital',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80'
+    };
   }
 
   async init() {
-    console.log('Inicializando LevConnect Omnichannel Cockpit...');
+    console.log('Inicializando LevConnect Omnichannel Cockpit v2.0 (SQLite + Copilot)...');
+
+    // Load Sellers for Multi-Branch Profile Switching
+    try {
+      const sellersData = await api.getSellers();
+      this.sellers = sellersData.sellers || [];
+      if (this.sellers.length > 0) {
+        this.currentSeller = this.sellers[0];
+      }
+    } catch (e) {
+      console.error('Erro ao carregar vendedores:', e);
+    }
 
     // Initialize modules
     await this.ChatModule.init((customer, chat) => {
@@ -59,7 +78,34 @@ class LevConnectApp {
       headerStoreSelect.addEventListener('change', (e) => {
         const store = e.target.value;
         this.StockModule.setActiveStore(store);
-        this.showToast(`Filial alterada para: ${store}`);
+        this.showToast(`Filial ativa alterada para: ${store}`);
+      });
+    }
+
+    // Seller Profile Switcher Modal Trigger
+    const sellerSwitcher = document.getElementById('seller-profile-switcher');
+    if (sellerSwitcher) {
+      sellerSwitcher.addEventListener('click', () => {
+        this.renderSellersSwitchModal();
+        this.openModal('modal-seller-switch');
+      });
+    }
+
+    // SQLite Demo Reset button inside Dashboard
+    const btnResetDb = document.getElementById('btn-reset-demo-db');
+    if (btnResetDb) {
+      btnResetDb.addEventListener('click', async () => {
+        try {
+          await api.resetDatabase();
+          await this.ChatModule.loadChats(true);
+          await this.StockModule.loadProducts();
+          await this.ReservationsModule.loadReservations();
+          await this.DashboardModule.loadStats();
+          this.showToast('Banco SQLite restaurado para o estado original de demonstração!');
+        } catch (err) {
+          console.error(err);
+          this.showToast('Erro ao restaurar banco SQLite', 'error');
+        }
       });
     }
 
@@ -139,12 +185,61 @@ class LevConnectApp {
     const btnAttach = document.getElementById('btn-attach-catalog-product');
     if (btnAttach) {
       btnAttach.addEventListener('click', () => {
-        // Switch to Stock tab to let seller pick product
         const stockTabBtn = document.querySelector('[data-tab="tab-stock"]');
         if (stockTabBtn) stockTabBtn.click();
         this.showToast('Selecione um produto no estoque e clique no ícone de aviãozinho para enviar ao cliente.');
       });
     }
+  }
+
+  renderSellersSwitchModal() {
+    const container = document.getElementById('sellers-switch-list');
+    if (!container) return;
+
+    container.innerHTML = this.sellers.map(s => {
+      const isCurrent = this.currentSeller && this.currentSeller.id === s.id;
+      return `
+        <div class="seller-switch-item ${isCurrent ? 'active' : ''}" data-seller-id="${s.id}">
+          <img src="${s.avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100'}" alt="${s.name}" class="seller-avatar">
+          <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 0.85rem; color: #fff;">${s.name}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">${s.role} • Filial <strong>${s.store}</strong></div>
+          </div>
+          ${isCurrent ? `<span class="status-badge reserved">Logado</span>` : `<button class="btn-res-action">Selecionar</button>`}
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.seller-switch-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const sellerId = item.dataset.sellerId;
+        const chosen = this.sellers.find(s => s.id === sellerId);
+        if (chosen) {
+          this.switchSeller(chosen);
+        }
+      });
+    });
+  }
+
+  switchSeller(seller) {
+    this.currentSeller = seller;
+
+    const avatarEl = document.getElementById('header-seller-avatar');
+    const nameEl = document.getElementById('header-seller-name');
+    const roleEl = document.getElementById('header-seller-role');
+    const headerStoreSelect = document.getElementById('header-store-select');
+
+    if (avatarEl && seller.avatar) avatarEl.src = seller.avatar;
+    if (nameEl) nameEl.innerHTML = `${seller.name} <i class="fa-solid fa-caret-down" style="font-size: 0.7rem; opacity: 0.7;"></i>`;
+    if (roleEl) roleEl.textContent = `${seller.store} • Online`;
+
+    if (headerStoreSelect) {
+      headerStoreSelect.value = seller.store;
+    }
+
+    this.StockModule.setActiveStore(seller.store);
+    this.closeModal('modal-seller-switch');
+    this.showToast(`Operador alterado para ${seller.name} (Filial ${seller.store})`);
   }
 
   openModal(modalId) {
@@ -178,12 +273,9 @@ class LevConnectApp {
   }
 
   async openReservationModalWithProduct(product = null, preSelectedSize = null) {
-    // Populate customers
     const custSelect = document.getElementById('res-modal-customer-select');
     const prodSelect = document.getElementById('res-modal-product-select');
-    const sizeSelect = document.getElementById('res-modal-size-select');
     const pickupSelect = document.getElementById('res-modal-pickup-store');
-    const sourceSelect = document.getElementById('res-modal-source-store');
 
     const customersData = await api.getCustomers();
     const customers = customersData.customers || [];
@@ -214,13 +306,12 @@ class LevConnectApp {
       };
     }
 
-    this.updateModalSizesAndSources(selectedProd, preSelectedSize);
-
-    // Set default pickup store to the customer's store or active store
     if (pickupSelect) {
       const preferred = this.CustomerModule.currentCustomer ? this.CustomerModule.currentCustomer.preferred_store : this.StockModule.activeStore;
       pickupSelect.value = preferred || 'Charqueadas';
     }
+
+    this.updateModalSizesAndSources(selectedProd, preSelectedSize);
 
     this.openModal('modal-reservation');
   }
@@ -228,9 +319,6 @@ class LevConnectApp {
   updateModalSizesAndSources(product, preferredSize) {
     if (!product) return;
     const sizeSelect = document.getElementById('res-modal-size-select');
-    const sourceSelect = document.getElementById('res-modal-source-store');
-    const alertBox = document.getElementById('res-transfer-alert-box');
-    const pickupSelect = document.getElementById('res-modal-pickup-store');
 
     const chosenSize = preferredSize || product.sizes[0];
 
@@ -255,7 +343,6 @@ class LevConnectApp {
 
     const stores = ["Charqueadas", "Minas do Leão", "Encruzilhada do Sul", "Pantâno Grande", "Rio Pardo"];
     
-    // Sort so stores with stock come first
     const options = stores.map(st => {
       const qty = (product.stock[st] && product.stock[st][size]) || 0;
       return { store: st, qty };
@@ -267,8 +354,10 @@ class LevConnectApp {
       </option>
     `).join('');
 
-    // Preselect a store with stock > 0
-    const firstWithStock = options.find(o => o.qty > 0);
+    // Prefer local pickup store if it has stock > 0, otherwise first store with stock > 0
+    const pickupStoreVal = pickupSelect ? pickupSelect.value : this.StockModule.activeStore;
+    const localWithStock = options.find(o => o.store === pickupStoreVal && o.qty > 0);
+    const firstWithStock = localWithStock || options.find(o => o.qty > 0);
     if (firstWithStock) {
       sourceSelect.value = firstWithStock.store;
     }
@@ -320,7 +409,6 @@ class LevConnectApp {
         custom_message: customMsg
       });
 
-      // Reload chats and highlight
       await this.ChatModule.loadChats();
       if (result.chat_id) {
         await this.ChatModule.selectChat(result.chat_id);
@@ -334,7 +422,6 @@ class LevConnectApp {
   }
 
   setupAutoPolling() {
-    // Poll every 12 seconds to keep data synced if updated externally
     setInterval(async () => {
       try {
         await this.ChatModule.loadChats(false);
@@ -345,7 +432,6 @@ class LevConnectApp {
   }
 }
 
-// Instantiate and attach to window
 window.app = new LevConnectApp();
 document.addEventListener('DOMContentLoaded', () => {
   window.app.init();

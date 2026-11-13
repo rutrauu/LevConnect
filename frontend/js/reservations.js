@@ -1,5 +1,5 @@
 /**
- * LevConnect - Reservations Module (Clique e Retire / O2O Cross-Store)
+ * LevConnect - Reservations & Inter-Store Malote Logistics Module
  */
 
 import { api } from './api.js';
@@ -22,13 +22,11 @@ export const ReservationsModule = {
       });
     }
 
-    // Reservation creation form submission
     const btnSubmit = document.getElementById('btn-submit-create-reservation');
     if (btnSubmit) {
       btnSubmit.addEventListener('click', () => this.handleCreateReservation());
     }
 
-    // Listen to changes in source/pickup store select in modal to show warning
     const pickupSelect = document.getElementById('res-modal-pickup-store');
     const sourceSelect = document.getElementById('res-modal-source-store');
     const alertBox = document.getElementById('res-transfer-alert-box');
@@ -82,8 +80,28 @@ export const ReservationsModule = {
       'concluido': 'Retirada Concluída'
     };
 
+    const stepOrder = ['aguardando_separacao', 'em_transito', 'pronto_retirada', 'concluido'];
+
     container.innerHTML = this.reservations.map(res => {
-      const isComplete = res.status === 'concluido';
+      const currentStepIdx = stepOrder.indexOf(res.status);
+      let nextStatus = null;
+      let nextLabel = '';
+      let nextIcon = 'fa-check';
+
+      if (res.status === 'aguardando_separacao') {
+        nextStatus = res.is_inter_store ? 'em_transito' : 'pronto_retirada';
+        nextLabel = res.is_inter_store ? 'Despachar Malote' : 'Confirmar no Balcão';
+        nextIcon = res.is_inter_store ? 'fa-truck-fast' : 'fa-box-open';
+      } else if (res.status === 'em_transito') {
+        nextStatus = 'pronto_retirada';
+        nextLabel = 'Confirmar Chegada (Avisar Whats)';
+        nextIcon = 'fa-bell';
+      } else if (res.status === 'pronto_retirada') {
+        nextStatus = 'concluido';
+        nextLabel = 'Concluir Retirada';
+        nextIcon = 'fa-check-double';
+      }
+
       return `
         <div class="res-card" data-res-id="${res.id}">
           <div class="res-card-header">
@@ -115,14 +133,37 @@ export const ReservationsModule = {
             `}
           </div>
 
+          <!-- 4-Step Logistics Stepper -->
+          <div class="logistics-stepper">
+            <div class="step-item ${currentStepIdx >= 0 ? 'done' : ''}">
+              <span class="step-dot">1</span>
+              <span class="step-lbl">Separação</span>
+            </div>
+            <div class="step-line ${currentStepIdx >= 1 ? 'done' : ''}"></div>
+            <div class="step-item ${currentStepIdx >= 1 ? 'done' : ''}">
+              <span class="step-dot">2</span>
+              <span class="step-lbl">Malote</span>
+            </div>
+            <div class="step-line ${currentStepIdx >= 2 ? 'done' : ''}"></div>
+            <div class="step-item ${currentStepIdx >= 2 ? 'done' : ''}">
+              <span class="step-dot">3</span>
+              <span class="step-lbl">Na Loja</span>
+            </div>
+            <div class="step-line ${currentStepIdx >= 3 ? 'done' : ''}"></div>
+            <div class="step-item ${currentStepIdx >= 3 ? 'done' : ''}">
+              <span class="step-dot">4</span>
+              <span class="step-lbl">Entregue</span>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div class="res-card-actions">
             <button class="btn-res-action" data-action="view-voucher" data-res-id="${res.id}">
               <i class="fa-solid fa-qrcode"></i> Voucher
             </button>
-            ${!isComplete ? `
-              <button class="btn-res-action complete" data-action="mark-complete" data-res-id="${res.id}">
-                <i class="fa-solid fa-check"></i> Concluir Retirada
+            ${nextStatus ? `
+              <button class="btn-res-action complete" data-action="advance-status" data-res-id="${res.id}" data-next-status="${nextStatus}">
+                <i class="fa-solid ${nextIcon}"></i> ${nextLabel}
               </button>
             ` : ''}
           </div>
@@ -130,19 +171,28 @@ export const ReservationsModule = {
       `;
     }).join('');
 
-    // Attach actions
     container.querySelectorAll('[data-action="view-voucher"]').forEach(btn => {
       btn.addEventListener('click', () => {
         window.app.openVoucherModal(btn.dataset.resId);
       });
     });
 
-    container.querySelectorAll('[data-action="mark-complete"]').forEach(btn => {
+    container.querySelectorAll('[data-action="advance-status"]').forEach(btn => {
       btn.addEventListener('click', async () => {
+        const resId = btn.dataset.resId;
+        const nextStatus = btn.dataset.nextStatus;
         try {
-          await api.updateReservationStatus(btn.dataset.resId, 'concluido');
-          window.app.showToast('Reserva concluída! Peça retirada pelo cliente.');
-          this.loadReservations();
+          const result = await api.updateReservationStatus(resId, nextStatus);
+          if (result.auto_notification) {
+            window.app.showToast('Status logístico atualizado e cliente notificado no WhatsApp!');
+          } else {
+            window.app.showToast('Status da ordem atualizado!');
+          }
+          await this.loadReservations();
+          if (window.app.ChatModule.currentChatId) {
+            await window.app.ChatModule.selectChat(window.app.ChatModule.currentChatId);
+            await window.app.ChatModule.loadChats(false);
+          }
         } catch (err) {
           console.error(err);
         }
@@ -162,6 +212,7 @@ export const ReservationsModule = {
 
     try {
       const activeChatId = window.app.ChatModule.currentChatId;
+      const sellerName = (window.app.currentSeller && window.app.currentSeller.name) || 'Mariana Santos';
 
       const res = await api.createReservation({
         customer_id: customerSelect.value,
@@ -170,18 +221,18 @@ export const ReservationsModule = {
         pickup_store: pickupSelect.value,
         source_store: sourceSelect.value,
         chat_id: activeChatId,
-        seller_name: 'Mariana Santos',
+        seller_name: sellerName,
         notes: notesInput.value.trim()
       });
 
       window.app.closeModal('modal-reservation');
-      window.app.showToast(`Ordem de Reserva ${res.reservation.id} criada com sucesso!`);
+      window.app.showToast(`Ordem de Reserva ${res.reservation.id} criada e persistida no SQLite!`);
 
-      // Refresh modules
       await this.loadReservations();
       await window.app.StockModule.loadProducts();
       if (activeChatId) {
         await window.app.ChatModule.selectChat(activeChatId);
+        await window.app.ChatModule.loadChats(false);
       }
     } catch (err) {
       console.error(err);

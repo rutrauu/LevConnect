@@ -1,6 +1,6 @@
 /**
  * LevConnect - Dashboard & Analytics Module
- * KPIs: Response Time, Conversion Rate, Cross-Store Transfers, Demand by Size
+ * KPIs: Response Time, Conversion Rate, Cross-Store Transfers, Demand by Size & SQLite Diagnostics
  */
 
 import { api } from './api.js';
@@ -18,9 +18,17 @@ export const DashboardModule = {
       this.renderKPIs(data.kpis);
       this.renderStoresTable(data.stores_ranking);
       this.renderDemandHistogram(data.shoe_size_demand);
+      this.renderDbDiagnostics(data.db_diagnostics);
     } catch (err) {
       console.error('Erro ao carregar estatísticas do dashboard:', err);
     }
+  },
+
+  renderDbDiagnostics(diag) {
+    const el = document.getElementById('db-diagnostics-summary');
+    if (!el || !diag) return;
+    const t = diag.tables || {};
+    el.textContent = `Arquivo: ${diag.database_file} (${diag.size_kb} KB) • Clientes: ${t.customers || 0} | Produtos: ${t.products || 0} | Saldos Grade: ${t.product_stock || 0} | Reservas: ${t.reservations || 0} | Mensagens: ${t.chat_messages || 0}`;
   },
 
   renderKPIs(kpis) {
@@ -56,7 +64,7 @@ export const DashboardModule = {
         </td>
         <td>
           <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; color: #4ade80;">
-            <i class="fa-solid fa-circle-dot" style="font-size: 7px;"></i> Online (ERP Sinc.)
+            <i class="fa-solid fa-circle-dot" style="font-size: 7px;"></i> Online (SQLite Sinc.)
           </span>
         </td>
       </tr>

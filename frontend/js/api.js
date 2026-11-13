@@ -10,6 +10,21 @@ export const api = {
     return res.json();
   },
 
+  async getSellers() {
+    const res = await fetch(`${API_BASE}/sellers`);
+    return res.json();
+  },
+
+  async getDatabaseStatus() {
+    const res = await fetch(`${API_BASE}/database/status`);
+    return res.json();
+  },
+
+  async resetDatabase() {
+    const res = await fetch(`${API_BASE}/database/reset`, { method: 'POST' });
+    return res.json();
+  },
+
   async getChats(status = 'all', search = '') {
     const params = new URLSearchParams();
     if (status && status !== 'all') params.append('status_filter', status);
@@ -99,6 +114,29 @@ export const api = {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
+    });
+    return res.json();
+  },
+
+  async getCopilotSuggestion(chatId, activeStore = 'Charqueadas', sellerName = 'Mariana Santos') {
+    const res = await fetch(`${API_BASE}/copilot/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, active_store: activeStore, seller_name: sellerName })
+    });
+    return res.json();
+  },
+
+  async sendVipCampaign(productId, size, activeStore = 'Charqueadas', sellerName = 'Mariana Santos') {
+    const res = await fetch(`${API_BASE}/crm/vip-campaign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: productId,
+        size: size,
+        active_store: activeStore,
+        seller_name: sellerName
+      })
     });
     return res.json();
   },

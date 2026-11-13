@@ -1,10 +1,15 @@
 """
-LevConnect - In-Memory Database & State Management
+LevConnect - Relational SQLite Database & State Management
 Case Study: Lojas Lev (Minas do Leão, Charqueadas, Encruzilhada do Sul, Pantâno Grande, Rio Pardo)
 """
 
-from datetime import datetime, timedelta
-import random
+import sqlite3
+import json
+import os
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "levconnect.db")
 
 STORES = [
     "Charqueadas",
@@ -14,15 +19,45 @@ STORES = [
     "Rio Pardo"
 ]
 
-SELLERS = [
-    {"id": "SEL-01", "name": "Mariana Santos", "store": "Charqueadas", "role": "Vendedora Digital"},
-    {"id": "SEL-02", "name": "Lucas Pereira", "store": "Minas do Leão", "role": "Vendedor Balcão & Whats"},
-    {"id": "SEL-03", "name": "Camila Oliveira", "store": "Rio Pardo", "role": "Gerente de Atendimento"},
-    {"id": "SEL-04", "name": "Rodrigo Silva", "store": "Pantâno Grande", "role": "Vendedor"},
-    {"id": "SEL-05", "name": "Fernanda Souza", "store": "Encruzilhada do Sul", "role": "Vendedora"}
+INITIAL_SELLERS = [
+    {
+        "id": "SEL-01",
+        "name": "Mariana Santos",
+        "store": "Charqueadas",
+        "role": "Vendedora Digital",
+        "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80"
+    },
+    {
+        "id": "SEL-02",
+        "name": "Lucas Pereira",
+        "store": "Minas do Leão",
+        "role": "Vendedor Balcão & Whats",
+        "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80"
+    },
+    {
+        "id": "SEL-03",
+        "name": "Camila Oliveira",
+        "store": "Rio Pardo",
+        "role": "Gerente de Atendimento",
+        "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80"
+    },
+    {
+        "id": "SEL-04",
+        "name": "Rodrigo Silva",
+        "store": "Pantâno Grande",
+        "role": "Vendedor Omnichannel",
+        "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80"
+    },
+    {
+        "id": "SEL-05",
+        "name": "Fernanda Souza",
+        "store": "Encruzilhada do Sul",
+        "role": "Consultora de Moda",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+    }
 ]
 
-CUSTOMERS = [
+INITIAL_CUSTOMERS = [
     {
         "id": "CUST-001",
         "name": "Juliana Silveira",
@@ -71,7 +106,7 @@ CUSTOMERS = [
         "city": "Rio Pardo",
         "preferred_store": "Rio Pardo",
         "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-        "shoe_size": "41",
+        "shoe_size": "40",
         "clothing_size_top": "GG",
         "clothing_size_bottom": "44",
         "favorite_brands": ["Lev Man", "Reserva", "Osklen"],
@@ -80,7 +115,7 @@ CUSTOMERS = [
         "vip_status": False,
         "notes": "Costuma comprar presentes para a esposa e calçados casuais para si.",
         "history": [
-            {"date": "2026-09-01", "item": "Tênis Casual Couro (41)", "price": 259.90, "store": "Rio Pardo"}
+            {"date": "2026-09-01", "item": "Tênis Casual Couro (40)", "price": 259.90, "store": "Rio Pardo"}
         ]
     },
     {
@@ -122,7 +157,7 @@ CUSTOMERS = [
     }
 ]
 
-PRODUCTS = [
+INITIAL_PRODUCTS = [
     {
         "id": "PROD-001",
         "sku": "BOT-CTR-01",
@@ -220,7 +255,7 @@ PRODUCTS = [
     }
 ]
 
-RESERVATIONS = [
+INITIAL_RESERVATIONS = [
     {
         "id": "RES-8901",
         "customer_id": "CUST-001",
@@ -283,7 +318,7 @@ RESERVATIONS = [
     }
 ]
 
-CHATS = [
+INITIAL_CHATS = [
     {
         "id": "CHAT-101",
         "customer_id": "CUST-001",
@@ -344,7 +379,8 @@ CHATS = [
                     "size": "37",
                     "price": "R$ 289,90",
                     "pickup_store": "Charqueadas",
-                    "source_store": "Minas do Leão"
+                    "source_store": "Minas do Leão",
+                    "is_inter_store": True
                 }
             },
             {
@@ -444,3 +480,409 @@ CHATS = [
         ]
     }
 ]
+
+# In-memory mirrors synced with SQLite
+SELLERS: List[Dict[str, Any]] = []
+CUSTOMERS: List[Dict[str, Any]] = []
+PRODUCTS: List[Dict[str, Any]] = []
+RESERVATIONS: List[Dict[str, Any]] = []
+CHATS: List[Dict[str, Any]] = []
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db(force_reset: bool = False) -> None:
+    """Creates relational tables in SQLite and seeds initial Lojas Lev data if empty."""
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if force_reset:
+        cur.executescript("""
+            DROP TABLE IF EXISTS chat_messages;
+            DROP TABLE IF EXISTS chats;
+            DROP TABLE IF EXISTS reservations;
+            DROP TABLE IF EXISTS product_stock;
+            DROP TABLE IF EXISTS products;
+            DROP TABLE IF EXISTS customers;
+            DROP TABLE IF EXISTS sellers;
+        """)
+
+    cur.executescript("""
+        CREATE TABLE IF NOT EXISTS sellers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            store TEXT NOT NULL,
+            role TEXT NOT NULL,
+            avatar TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS customers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            city TEXT,
+            preferred_store TEXT,
+            avatar TEXT,
+            shoe_size TEXT,
+            clothing_size_top TEXT,
+            clothing_size_bottom TEXT,
+            favorite_brands_json TEXT,
+            total_purchases INTEGER DEFAULT 0,
+            lifetime_value REAL DEFAULT 0.0,
+            vip_status INTEGER DEFAULT 0,
+            notes TEXT,
+            history_json TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS products (
+            id TEXT PRIMARY KEY,
+            sku TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            brand TEXT NOT NULL,
+            price REAL NOT NULL,
+            image TEXT,
+            description TEXT,
+            type TEXT,
+            sizes_json TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS product_stock (
+            product_id TEXT NOT NULL,
+            store TEXT NOT NULL,
+            size TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (product_id, store, size),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS reservations (
+            id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT NOT NULL,
+            product_id TEXT NOT NULL,
+            product_sku TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            product_image TEXT,
+            size TEXT NOT NULL,
+            price REAL NOT NULL,
+            pickup_store TEXT NOT NULL,
+            source_store TEXT NOT NULL,
+            is_inter_store INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            seller_name TEXT,
+            notes TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS chats (
+            id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT NOT NULL,
+            avatar TEXT,
+            assigned_seller TEXT,
+            seller_store TEXT,
+            status TEXT NOT NULL,
+            unread INTEGER DEFAULT 0,
+            last_message TEXT,
+            last_time TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL,
+            seq INTEGER NOT NULL,
+            sender TEXT NOT NULL,
+            text TEXT NOT NULL,
+            time TEXT NOT NULL,
+            type TEXT DEFAULT 'text',
+            payload_json TEXT,
+            FOREIGN KEY (chat_id) REFERENCES chats(id)
+        );
+    """)
+
+    # Seed if empty
+    cur.execute("SELECT COUNT(*) as cnt FROM products")
+    if cur.fetchone()["cnt"] == 0:
+        for s in INITIAL_SELLERS:
+            cur.execute(
+                "INSERT INTO sellers (id, name, store, role, avatar) VALUES (?, ?, ?, ?, ?)",
+                (s["id"], s["name"], s["store"], s["role"], s.get("avatar", ""))
+            )
+
+        for c in INITIAL_CUSTOMERS:
+            cur.execute("""
+                INSERT INTO customers (
+                    id, name, phone, city, preferred_store, avatar,
+                    shoe_size, clothing_size_top, clothing_size_bottom,
+                    favorite_brands_json, total_purchases, lifetime_value,
+                    vip_status, notes, history_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                c["id"], c["name"], c["phone"], c["city"], c["preferred_store"], c["avatar"],
+                c["shoe_size"], c["clothing_size_top"], c["clothing_size_bottom"],
+                json.dumps(c["favorite_brands"], ensure_ascii=False),
+                c["total_purchases"], c["lifetime_value"],
+                1 if c["vip_status"] else 0, c["notes"],
+                json.dumps(c["history"], ensure_ascii=False)
+            ))
+
+        for p in INITIAL_PRODUCTS:
+            cur.execute("""
+                INSERT INTO products (
+                    id, sku, name, category, brand, price, image, description, type, sizes_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                p["id"], p["sku"], p["name"], p["category"], p["brand"],
+                p["price"], p["image"], p["description"], p["type"],
+                json.dumps(p["sizes"], ensure_ascii=False)
+            ))
+            for store_name, sizes_dict in p["stock"].items():
+                for sz, qty in sizes_dict.items():
+                    cur.execute(
+                        "INSERT INTO product_stock (product_id, store, size, quantity) VALUES (?, ?, ?, ?)",
+                        (p["id"], store_name, sz, qty)
+                    )
+
+        for r in INITIAL_RESERVATIONS:
+            cur.execute("""
+                INSERT INTO reservations (
+                    id, customer_id, customer_name, customer_phone,
+                    product_id, product_sku, product_name, product_image,
+                    size, price, pickup_store, source_store, is_inter_store,
+                    status, created_at, expires_at, seller_name, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                r["id"], r["customer_id"], r["customer_name"], r["customer_phone"],
+                r["product_id"], r["product_sku"], r["product_name"], r["product_image"],
+                r["size"], r["price"], r["pickup_store"], r["source_store"],
+                1 if r["is_inter_store"] else 0, r["status"],
+                r["created_at"], r["expires_at"], r["seller_name"], r["notes"]
+            ))
+
+        for ch in INITIAL_CHATS:
+            cur.execute("""
+                INSERT INTO chats (
+                    id, customer_id, customer_name, customer_phone, avatar,
+                    assigned_seller, seller_store, status, unread, last_message, last_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                ch["id"], ch["customer_id"], ch["customer_name"], ch["customer_phone"],
+                ch["avatar"], ch["assigned_seller"], ch["seller_store"],
+                ch["status"], ch["unread"], ch["last_message"], ch["last_time"]
+            ))
+            for idx, m in enumerate(ch["messages"]):
+                cur.execute("""
+                    INSERT INTO chat_messages (
+                        id, chat_id, seq, sender, text, time, type, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    m["id"], ch["id"], idx, m["sender"], m["text"], m["time"],
+                    m.get("type", "text"),
+                    json.dumps(m["payload"], ensure_ascii=False) if m.get("payload") else None
+                ))
+
+        conn.commit()
+
+    conn.close()
+    load_from_sqlite()
+
+
+def load_from_sqlite() -> None:
+    """Loads SQLite tables into the module-level lists."""
+    global SELLERS, CUSTOMERS, PRODUCTS, RESERVATIONS, CHATS
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM sellers")
+    SELLERS.clear()
+    for row in cur.fetchall():
+        SELLERS.append(dict(row))
+
+    cur.execute("SELECT * FROM customers")
+    CUSTOMERS.clear()
+    for row in cur.fetchall():
+        d = dict(row)
+        CUSTOMERS.append({
+            "id": d["id"],
+            "name": d["name"],
+            "phone": d["phone"],
+            "city": d["city"],
+            "preferred_store": d["preferred_store"],
+            "avatar": d["avatar"],
+            "shoe_size": d["shoe_size"],
+            "clothing_size_top": d["clothing_size_top"],
+            "clothing_size_bottom": d["clothing_size_bottom"],
+            "favorite_brands": json.loads(d["favorite_brands_json"] or "[]"),
+            "total_purchases": d["total_purchases"],
+            "lifetime_value": d["lifetime_value"],
+            "vip_status": bool(d["vip_status"]),
+            "notes": d["notes"],
+            "history": json.loads(d["history_json"] or "[]")
+        })
+
+    cur.execute("SELECT * FROM products")
+    prod_rows = cur.fetchall()
+    PRODUCTS.clear()
+    for row in prod_rows:
+        d = dict(row)
+        cur.execute("SELECT store, size, quantity FROM product_stock WHERE product_id = ?", (d["id"],))
+        stock_map: Dict[str, Dict[str, int]] = {st: {} for st in STORES}
+        for srow in cur.fetchall():
+            if srow["store"] not in stock_map:
+                stock_map[srow["store"]] = {}
+            stock_map[srow["store"]][srow["size"]] = srow["quantity"]
+
+        PRODUCTS.append({
+            "id": d["id"],
+            "sku": d["sku"],
+            "name": d["name"],
+            "category": d["category"],
+            "brand": d["brand"],
+            "price": d["price"],
+            "image": d["image"],
+            "description": d["description"],
+            "type": d["type"],
+            "sizes": json.loads(d["sizes_json"] or "[]"),
+            "stock": stock_map
+        })
+
+    cur.execute("SELECT * FROM reservations ORDER BY created_at DESC")
+    RESERVATIONS.clear()
+    for row in cur.fetchall():
+        d = dict(row)
+        d["is_inter_store"] = bool(d["is_inter_store"])
+        RESERVATIONS.append(d)
+
+    cur.execute("SELECT * FROM chats")
+    chat_rows = cur.fetchall()
+    CHATS.clear()
+    for row in chat_rows:
+        d = dict(row)
+        cur.execute("SELECT * FROM chat_messages WHERE chat_id = ? ORDER BY seq ASC", (d["id"],))
+        msgs = []
+        for mrow in cur.fetchall():
+            md = dict(mrow)
+            msg_obj = {
+                "id": md["id"],
+                "sender": md["sender"],
+                "text": md["text"],
+                "time": md["time"],
+                "type": md["type"]
+            }
+            if md["payload_json"]:
+                msg_obj["payload"] = json.loads(md["payload_json"])
+            msgs.append(msg_obj)
+        d["messages"] = msgs
+        CHATS.append(d)
+
+    conn.close()
+
+
+def save_state_to_sqlite() -> None:
+    """Persists the current state of CUSTOMERS, PRODUCTS, RESERVATIONS, and CHATS into SQLite."""
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Sync Customers
+    for c in CUSTOMERS:
+        cur.execute("""
+            INSERT OR REPLACE INTO customers (
+                id, name, phone, city, preferred_store, avatar,
+                shoe_size, clothing_size_top, clothing_size_bottom,
+                favorite_brands_json, total_purchases, lifetime_value,
+                vip_status, notes, history_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            c["id"], c["name"], c["phone"], c.get("city", ""), c.get("preferred_store", "Charqueadas"),
+            c.get("avatar", ""), c.get("shoe_size", ""), c.get("clothing_size_top", ""),
+            c.get("clothing_size_bottom", ""),
+            json.dumps(c.get("favorite_brands", []), ensure_ascii=False),
+            c.get("total_purchases", 0), c.get("lifetime_value", 0.0),
+            1 if c.get("vip_status") else 0, c.get("notes", ""),
+            json.dumps(c.get("history", []), ensure_ascii=False)
+        ))
+
+    # Sync Product Stock
+    for p in PRODUCTS:
+        for store_name, sizes_dict in p["stock"].items():
+            for sz, qty in sizes_dict.items():
+                cur.execute("""
+                    INSERT OR REPLACE INTO product_stock (product_id, store, size, quantity)
+                    VALUES (?, ?, ?, ?)
+                """, (p["id"], store_name, sz, qty))
+
+    # Sync Reservations
+    for r in RESERVATIONS:
+        cur.execute("""
+            INSERT OR REPLACE INTO reservations (
+                id, customer_id, customer_name, customer_phone,
+                product_id, product_sku, product_name, product_image,
+                size, price, pickup_store, source_store, is_inter_store,
+                status, created_at, expires_at, seller_name, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            r["id"], r["customer_id"], r["customer_name"], r["customer_phone"],
+            r["product_id"], r["product_sku"], r["product_name"], r.get("product_image", ""),
+            r["size"], r["price"], r["pickup_store"], r["source_store"],
+            1 if r["is_inter_store"] else 0, r["status"],
+            r["created_at"], r["expires_at"], r.get("seller_name", "Mariana Santos"), r.get("notes", "")
+        ))
+
+    # Sync Chats & Messages
+    for ch in CHATS:
+        cur.execute("""
+            INSERT OR REPLACE INTO chats (
+                id, customer_id, customer_name, customer_phone, avatar,
+                assigned_seller, seller_store, status, unread, last_message, last_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            ch["id"], ch["customer_id"], ch["customer_name"], ch["customer_phone"],
+            ch.get("avatar", ""), ch.get("assigned_seller", "Mariana Santos"),
+            ch.get("seller_store", "Charqueadas"), ch["status"],
+            ch.get("unread", 0), ch.get("last_message", ""), ch.get("last_time", "")
+        ))
+        cur.execute("DELETE FROM chat_messages WHERE chat_id = ?", (ch["id"],))
+        for idx, m in enumerate(ch.get("messages", [])):
+            cur.execute("""
+                INSERT INTO chat_messages (
+                    id, chat_id, seq, sender, text, time, type, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                m["id"], ch["id"], idx, m["sender"], m["text"], m["time"],
+                m.get("type", "text"),
+                json.dumps(m["payload"], ensure_ascii=False) if m.get("payload") else None
+            ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_db_diagnostics() -> Dict[str, Any]:
+    """Returns SQLite database metadata and row counts."""
+    conn = get_connection()
+    cur = conn.cursor()
+    tables = ["sellers", "customers", "products", "product_stock", "reservations", "chats", "chat_messages"]
+    counts = {}
+    for t in tables:
+        cur.execute(f"SELECT COUNT(*) as c FROM {t}")
+        counts[t] = cur.fetchone()["c"]
+    conn.close()
+    size_kb = round(os.path.getsize(DB_PATH) / 1024, 1) if os.path.exists(DB_PATH) else 0
+    return {
+        "engine": "SQLite 3 (Relacional Persistente)",
+        "database_file": "backend/levconnect.db",
+        "size_kb": size_kb,
+        "tables": counts
+    }
+
+
+# Initialize SQLite database automatically on import
+init_db(force_reset=False)

@@ -1933,3 +1933,247 @@ button, input, select, textarea {
     grid-template-columns: 280px 1fr 360px;
   }
 }
+
+/* ==========================================================================
+   Lev AI Copilot Drawer & Smart Triggers (v2.0)
+   ========================================================================== */
+.btn-copilot-trigger {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(168, 85, 247, 0.35);
+  transition: var(--transition-fast);
+}
+
+.btn-copilot-trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.55);
+}
+
+.copilot-drawer {
+  background: linear-gradient(180deg, rgba(30, 27, 75, 0.96) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border-top: 1px solid rgba(129, 140, 248, 0.45);
+  border-bottom: 1px solid rgba(129, 140, 248, 0.25);
+  padding: 0.75rem 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.copilot-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.copilot-badge-title {
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #c4b5fd;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-close-copilot {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.copilot-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.copilot-rec-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.copilot-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.copilot-card-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.copilot-prod-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copilot-prod-meta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.btn-copilot-action {
+  background: #10b981;
+  color: #052e16;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-copilot-action.secondary {
+  background: rgba(192, 132, 252, 0.2);
+  color: #e9d5ff;
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+
+.copilot-reply-preview {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed rgba(129, 140, 248, 0.4);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ==========================================================================
+   4-Step Inter-Store Malote Logistics Stepper
+   ========================================================================== */
+.logistics-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  margin: 4px 0;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.4;
+}
+
+.step-item.done {
+  opacity: 1;
+}
+
+.step-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.step-item.done .step-dot {
+  background: #6366f1;
+  border-color: #818cf8;
+  color: #fff;
+}
+
+.step-lbl {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.step-item.done .step-lbl {
+  color: #e2e8f0;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px 10px 4px;
+}
+
+.step-line.done {
+  background: #6366f1;
+}
+
+/* ==========================================================================
+   Active CRM VIP Campaign Button & Seller Switcher
+   ========================================================================== */
+.btn-vip-campaign {
+  background: rgba(244, 63, 94, 0.14);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+
+.btn-vip-campaign:hover {
+  background: rgba(244, 63, 94, 0.28);
+  color: #fff;
+}
+
+.seller-switch-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.seller-switch-item:hover {
+  border-color: var(--primary);
+  background: var(--bg-surface-elevated);
+}
+
+.seller-switch-item.active {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}

@@ -48,9 +48,9 @@
         </select>
       </div>
 
-      <div class="api-status-pill" title="Webhook e API Oficial WhatsApp Business sincronizados em tempo real">
+      <div class="api-status-pill" title="Webhook WhatsApp Business e Banco SQLite Relacional ativos">
         <span class="pulse-dot"></span>
-        <i class="fa-brands fa-whatsapp"></i> WhatsApp Cloud API Ativa
+        <i class="fa-brands fa-whatsapp"></i> WhatsApp API • <i class="fa-solid fa-database" style="color: #38bdf8; margin-left: 2px;"></i> SQLite Ativo
       </div>
     </div>
 
@@ -71,11 +71,11 @@
         <span>Nova Reserva</span>
       </button>
 
-      <div class="seller-profile-badge">
-        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80" alt="Mariana" class="seller-avatar">
+      <div class="seller-profile-badge" id="seller-profile-switcher" title="Clique para alternar o vendedor/operador logado" style="cursor: pointer;">
+        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80" alt="Mariana" class="seller-avatar" id="header-seller-avatar">
         <div class="seller-info">
-          <span class="seller-name">Mariana Santos</span>
-          <span class="seller-role">Charqueadas • Online</span>
+          <span class="seller-name" id="header-seller-name">Mariana Santos <i class="fa-solid fa-caret-down" style="font-size: 0.7rem; opacity: 0.7;"></i></span>
+          <span class="seller-role" id="header-seller-role">Charqueadas • Online</span>
         </div>
       </div>
     </div>
@@ -164,9 +164,24 @@
         <!-- Rendered dynamically -->
       </div>
 
+      <!-- Lev AI Copilot Drawer (Smart Fashion & Cross-Store Suggestion) -->
+      <div class="copilot-drawer" id="copilot-drawer" style="display: none;">
+        <div class="copilot-drawer-header">
+          <span class="copilot-badge-title">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Lev AI Copilot • Recomendação Baseada na Ficha de Moda & Estoque 5 Filiais
+          </span>
+          <button type="button" class="btn-close-copilot" id="btn-close-copilot">&times;</button>
+        </div>
+        <div class="copilot-drawer-body" id="copilot-drawer-body">
+          <!-- Populated dynamically by chat.js -->
+        </div>
+      </div>
+
       <!-- Quick Reply Prompts -->
       <div class="quick-replies-section">
-        <span class="quick-reply-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Respostas Rápidas:</span>
+        <button type="button" class="btn-copilot-trigger" id="btn-trigger-copilot" title="Cruzar medidas do cliente com estoque das 5 filiais e sugerir look completo">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> ✨ Copiloto IA: Sugerir Look & Estoque
+        </button>
         <button class="quick-reply-pill" data-reply="Consultando o estoque nas 5 lojas em tempo real... Um instante!">
           📦 "Consultando estoque nas 5 lojas..."
         </button>
@@ -555,9 +570,52 @@
             <!-- Populated dynamically -->
           </div>
         </div>
+
+        <!-- Diagnóstico de Persistência SQLite -->
+        <div class="form-group" style="margin-top: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); padding: 10px 14px; border-radius: var(--radius-md);">
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: #38bdf8;">
+                <i class="fa-solid fa-database"></i> Persistência Relacional SQLite3 Ativa (backend/levconnect.db)
+              </div>
+              <div style="font-size: 0.7rem; color: var(--text-muted);" id="db-diagnostics-summary">
+                7 tabelas relacionais sincronizadas em tempo real.
+              </div>
+            </div>
+            <button class="btn-icon-text" id="btn-reset-demo-db" title="Restaurar banco SQLite para os dados iniciais da demonstração" style="font-size: 0.72rem; border-color: rgba(248, 113, 113, 0.4); color: #fca5a5;">
+              <i class="fa-solid fa-rotate-left"></i> Resetar Demo SQLite
+            </button>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn-icon-text" data-close="modal-dashboard">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: Trocar Perfil de Vendedor / Operador (Multi-Filial Login)
+       ========================================================================= -->
+  <div class="modal-overlay" id="modal-seller-switch">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <i class="fa-solid fa-user-shield" style="color: #818cf8;"></i>
+          Alternar Operador / Vendedor Logado
+        </h3>
+        <button class="btn-close-modal" data-close="modal-seller-switch">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Selecione com qual perfil de vendedor das 5 filiais das <strong>Lojas Lev</strong> você deseja operar o cockpit agora. O estoque local será sincronizado automaticamente com a loja do operador:
+        </p>
+        <div id="sellers-switch-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-icon-text" data-close="modal-seller-switch">Fechar</button>
       </div>
     </div>
   </div>

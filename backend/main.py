@@ -11,10 +11,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import random
 import os
-import uvicorn
-
 import sys
-import os
+import uvicorn
 
 # Add backend directory to sys.path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +24,7 @@ import database as db
 app = FastAPI(
     title="LevConnect API",
     description="Plataforma de CRM e Vendas Omnichannel para Varejo Regional (Lojas Lev)",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # Enable CORS for local development
@@ -71,11 +69,40 @@ class SimulationRequest(BaseModel):
     custom_customer_name: Optional[str] = None
     custom_message: Optional[str] = None
 
+class CopilotRequest(BaseModel):
+    chat_id: str
+    active_store: Optional[str] = "Charqueadas"
+    seller_name: Optional[str] = "Mariana Santos"
+
+class VipCampaignRequest(BaseModel):
+    product_id: str
+    size: str
+    active_store: Optional[str] = "Charqueadas"
+    seller_name: Optional[str] = "Mariana Santos"
+
 # --- API Endpoints ---
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "app": "LevConnect", "version": "1.0.0"}
+    return {
+        "status": "ok",
+        "app": "LevConnect",
+        "version": "2.0.0",
+        "persistence": "SQLite3"
+    }
+
+@app.get("/api/database/status")
+def database_status():
+    return db.get_db_diagnostics()
+
+@app.post("/api/database/reset")
+def reset_database():
+    db.init_db(force_reset=True)
+    return {
+        "status": "success",
+        "message": "Banco de dados SQLite restaurado para o estado inicial de demonstração.",
+        "diagnostics": db.get_db_diagnostics()
+    }
 
 @app.get("/api/stores")
 def get_stores():
@@ -102,7 +129,9 @@ def get_chat(chat_id: str):
         raise HTTPException(status_code=404, detail="Chat não encontrado")
     
     # Mark messages as read
-    chat["unread"] = 0
+    if chat.get("unread", 0) > 0:
+        chat["unread"] = 0
+        db.save_state_to_sqlite()
     
     # Get associated customer
     customer = next((cu for cu in db.CUSTOMERS if cu["id"] == chat["customer_id"]), None)
@@ -124,7 +153,7 @@ def send_message(chat_id: str, payload: MessageCreate):
     
     now_str = datetime.now().strftime("%H:%M")
     new_msg = {
-        "id": f"MSG-{int(datetime.now().timestamp() * 1000)}",
+        "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
         "sender": payload.sender,
         "text": payload.text,
         "time": now_str,
@@ -134,6 +163,7 @@ def send_message(chat_id: str, payload: MessageCreate):
     chat["messages"].append(new_msg)
     chat["last_message"] = payload.text
     chat["last_time"] = now_str
+    db.save_state_to_sqlite()
     
     return {"status": "success", "message": new_msg}
 
@@ -143,6 +173,7 @@ def update_chat_status(chat_id: str, payload: StatusUpdate):
     if not chat:
         raise HTTPException(status_code=404, detail="Chat não encontrado")
     chat["status"] = payload.status
+    db.save_state_to_sqlite()
     return {"status": "success", "chat_id": chat_id, "new_status": payload.status}
 
 # --- Customers (Smart CRM) ---
@@ -178,6 +209,7 @@ def update_customer(customer_id: str, payload: CustomerUpdate):
     if payload.favorite_brands is not None:
         customer["favorite_brands"] = payload.favorite_brands
         
+    db.save_state_to_sqlite()
     return {"status": "success", "customer": customer}
 
 # --- Products & Cross-Store Stock ---
@@ -202,7 +234,7 @@ def get_product(product_id: str):
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return {"product": product}
 
-# --- Reservations (Clique e Retire / Inter-Lojas) ---
+# --- Reservations & Inter-Store Malote Logistics ---
 
 @app.get("/api/reservations")
 def list_reservations(store: Optional[str] = None, status_filter: Optional[str] = None):
@@ -269,7 +301,7 @@ def create_reservation(payload: ReservationCreate):
         if chat:
             chat["status"] = "reserved"
             voucher_msg = {
-                "id": f"MSG-{int(datetime.now().timestamp() * 1000)}",
+                "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
                 "sender": "system",
                 "text": f"Ordem de Reserva #{res_code} confirmada! Retirada em {payload.pickup_store}" + 
                         (f" (Transferência de {payload.source_store})" if is_inter else " (Estoque local)"),
@@ -290,6 +322,7 @@ def create_reservation(payload: ReservationCreate):
             chat["last_message"] = f"Reserva #{res_code} emitida com sucesso"
             chat["last_time"] = now.strftime("%H:%M")
             
+    db.save_state_to_sqlite()
     return {"status": "success", "reservation": new_res}
 
 @app.patch("/api/reservations/{res_id}/status")
@@ -297,8 +330,264 @@ def update_reservation_status(res_id: str, payload: StatusUpdate):
     res = next((r for r in db.RESERVATIONS if r["id"] == res_id), None)
     if not res:
         raise HTTPException(status_code=404, detail="Reserva não encontrada")
+    
+    old_status = res["status"]
     res["status"] = payload.status
-    return {"status": "success", "reservation": res}
+    now_str = datetime.now().strftime("%H:%M")
+
+    # Find customer chat to send automated WhatsApp logistics notifications
+    chat = next((c for c in db.CHATS if c["customer_id"] == res["customer_id"]), None)
+    auto_msg = None
+
+    if chat and old_status != payload.status:
+        if payload.status == "em_transito":
+            text = (
+                f"🚚 Atualização de Malote ({res['id']}): Sua peça '{res['product_name']}' (Tam {res['size']}) "
+                f"saiu da filial {res['source_store']} e está em trânsito para {res['pickup_store']}!"
+            )
+            auto_msg = {
+                "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
+                "sender": "seller",
+                "text": text,
+                "time": now_str,
+                "type": "text"
+            }
+        elif payload.status == "pronto_retirada":
+            text = (
+                f"🎉 Oba, {res['customer_name'].split()[0]}! Sua reserva #{res['id']} ({res['product_name']} - Tam {res['size']}) "
+                f"já está separada no balcão da filial {res['pickup_store']} pronta para você provar e retirar!"
+            )
+            auto_msg = {
+                "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
+                "sender": "seller",
+                "text": text,
+                "time": now_str,
+                "type": "text"
+            }
+        elif payload.status == "concluido":
+            text = (
+                f"✅ Retirada concluída na loja de {res['pickup_store']}! Muito obrigado por comprar nas Lojas Lev, "
+                f"{res['customer_name'].split()[0]}! Esperamos que ame seu {res['product_name']}."
+            )
+            auto_msg = {
+                "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
+                "sender": "seller",
+                "text": text,
+                "time": now_str,
+                "type": "text"
+            }
+            chat["status"] = "closed"
+
+        if auto_msg:
+            chat["messages"].append(auto_msg)
+            chat["last_message"] = auto_msg["text"]
+            chat["last_time"] = now_str
+
+    db.save_state_to_sqlite()
+    return {"status": "success", "reservation": res, "auto_notification": auto_msg}
+
+# --- Lev AI Copilot (Smart Fashion & Cross-Store Recommendation) ---
+
+@app.post("/api/copilot/suggest")
+def copilot_suggest(payload: CopilotRequest):
+    chat = next((c for c in db.CHATS if c["id"] == payload.chat_id), None)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat não encontrado")
+    
+    customer = next((cu for cu in db.CUSTOMERS if cu["id"] == chat["customer_id"]), None)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    pickup_store = customer.get("preferred_store") or payload.active_store or "Charqueadas"
+    shoe_size = customer.get("shoe_size", "37")
+    top_size = customer.get("clothing_size_top", "M")
+    first_name = customer["name"].split()[0]
+
+    # Analyze last customer message for product keywords
+    customer_msgs = [m["text"].lower() for m in chat.get("messages", []) if m.get("sender") == "customer"]
+    last_text = customer_msgs[-1] if customer_msgs else ""
+
+    primary_product = None
+    for p in db.PRODUCTS:
+        keywords = [w.lower() for w in p["name"].split() if len(w) > 3]
+        if any(k in last_text for k in keywords):
+            primary_product = p
+            break
+
+    if not primary_product:
+        # Default to matching customer's category preference
+        primary_product = db.PRODUCTS[0]
+
+    target_size = shoe_size if primary_product["type"] == "shoes" else top_size
+    if target_size not in primary_product["sizes"]:
+        target_size = primary_product["sizes"][0]
+
+    local_qty = primary_product["stock"].get(pickup_store, {}).get(target_size, 0)
+    other_stores = [
+        st for st in db.STORES
+        if st != pickup_store and primary_product["stock"].get(st, {}).get(target_size, 0) > 0
+    ]
+
+    # Pick a cross-sell item from the opposite category to complete the look
+    opposite_type = "clothing" if primary_product["type"] == "shoes" else "shoes"
+    cross_sell_product = next((p for p in db.PRODUCTS if p["type"] == opposite_type), db.PRODUCTS[2])
+    cross_size = top_size if cross_sell_product["type"] == "clothing" else shoe_size
+    if cross_size not in cross_sell_product["sizes"]:
+        cross_size = cross_sell_product["sizes"][0]
+
+    if local_qty > 0:
+        availability_phrase = (
+            f"Acabei de conferir no estoque de {pickup_store} e temos {local_qty} unidade(s) "
+            f"de *{primary_product['name']}* na sua numeração exata (*{target_size}*) pronta para você provar hoje!"
+        )
+        recommended_source = pickup_store
+    elif other_stores:
+        best_source = other_stores[0]
+        source_qty = primary_product["stock"][best_source][target_size]
+        availability_phrase = (
+            f"Verifiquei no nosso sistema integrado: a numeração *{target_size}* de *{primary_product['name']}* "
+            f"esgotou aqui em {pickup_store}, mas temos *{source_qty} par(es)/peça(s) na filial de {best_source}*! "
+            f"Posso pedir a transferência gratuita pelo malote para você retirar e provar aqui em {pickup_store}."
+        )
+        recommended_source = best_source
+    else:
+        availability_phrase = (
+            f"Consultei as 5 filiais e a numeração {target_size} de {primary_product['name']} acabou de esgotar, "
+            f"mas posso separar uma opção similar na sua medida!"
+        )
+        recommended_source = pickup_store
+
+    cross_sell_phrase = (
+        f"💡 *Dica de Look Completo:* Como sei que você veste *{cross_size}* e adora {', '.join(customer.get('favorite_brands', ['Lev Collection'])[:2])}, "
+        f"essa peça combina perfeitamente com *{cross_sell_product['name']}* (R$ {cross_sell_product['price']:.2f}). Quer que eu separe as duas juntas no seu Clique & Retire?"
+    ).replace(".", ",")
+
+    suggested_reply = f"Oi {first_name}! ✨ {availability_phrase} {cross_sell_phrase}"
+
+    return {
+        "status": "success",
+        "customer_summary": {
+            "name": customer["name"],
+            "preferred_store": pickup_store,
+            "shoe_size": shoe_size,
+            "clothing_size_top": top_size,
+            "vip": customer.get("vip_status", False)
+        },
+        "primary_recommendation": {
+            "product_id": primary_product["id"],
+            "name": primary_product["name"],
+            "sku": primary_product["sku"],
+            "price": primary_product["price"],
+            "image": primary_product["image"],
+            "size": target_size,
+            "pickup_store": pickup_store,
+            "source_store": recommended_source,
+            "is_inter_store": (recommended_source != pickup_store),
+            "local_qty": local_qty
+        },
+        "cross_sell_recommendation": {
+            "product_id": cross_sell_product["id"],
+            "name": cross_sell_product["name"],
+            "sku": cross_sell_product["sku"],
+            "price": cross_sell_product["price"],
+            "image": cross_sell_product["image"],
+            "size": cross_size
+        },
+        "suggested_reply": suggested_reply
+    }
+
+# --- Active CRM: VIP Campaign by Size ---
+
+@app.get("/api/crm/vip-matches")
+def get_vip_matches(product_id: str, size: str):
+    product = next((p for p in db.PRODUCTS if p["id"] == product_id), None)
+    if not product:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    matches = []
+    for c in db.CUSTOMERS:
+        cust_size = c.get("shoe_size") if product["type"] == "shoes" else c.get("clothing_size_top")
+        if cust_size == size:
+            matches.append(c)
+
+    return {
+        "product": product["name"],
+        "size": size,
+        "matches_count": len(matches),
+        "customers": matches
+    }
+
+@app.post("/api/crm/vip-campaign")
+def send_vip_campaign(payload: VipCampaignRequest):
+    product = next((p for p in db.PRODUCTS if p["id"] == payload.product_id), None)
+    if not product:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    matching_customers = []
+    for c in db.CUSTOMERS:
+        cust_size = c.get("shoe_size") if product["type"] == "shoes" else c.get("clothing_size_top")
+        if cust_size == payload.size:
+            matching_customers.append(c)
+
+    if not matching_customers:
+        # Fallback to VIP customers if no exact size match
+        matching_customers = [c for c in db.CUSTOMERS if c.get("vip_status")]
+
+    now_str = datetime.now().strftime("%H:%M")
+    notified_chats = []
+
+    for cust in matching_customers:
+        chat = next((ch for ch in db.CHATS if ch["customer_id"] == cust["id"]), None)
+        if not chat:
+            chat = {
+                "id": f"CHAT-{len(db.CHATS) + 105}",
+                "customer_id": cust["id"],
+                "customer_name": cust["name"],
+                "customer_phone": cust["phone"],
+                "avatar": cust.get("avatar", ""),
+                "assigned_seller": payload.seller_name or "Mariana Santos",
+                "seller_store": cust.get("preferred_store", payload.active_store),
+                "status": "in_progress",
+                "unread": 0,
+                "last_message": "",
+                "last_time": now_str,
+                "messages": []
+            }
+            db.CHATS.insert(0, chat)
+
+        first_name = cust["name"].split()[0]
+        price_fmt = f"R$ {product['price']:.2f}".replace(".", ",")
+        campaign_text = (
+            f"🌟 *Alerta VIP Lojas Lev para {first_name}:* Lembrei de você! Temos *{product['name']}* "
+            f"disponível exatamente na sua numeração (*{payload.size}*) por {price_fmt}. "
+            f"Quer que eu já deixe reservado no Clique & Retire da loja de {cust.get('preferred_store', payload.active_store)}?"
+        )
+
+        msg = {
+            "id": f"MSG-{int(datetime.now().timestamp() * 1000)}-{random.randint(10,99)}",
+            "sender": "seller",
+            "text": campaign_text,
+            "time": now_str,
+            "type": "product_card",
+            "payload": {
+                "product_id": product["id"],
+                "name": product["name"],
+                "sku": product["sku"],
+                "price": product["price"],
+                "image": product["image"]
+            }
+        }
+        chat["messages"].append(msg)
+        chat["last_message"] = f"🎯 Oferta VIP Tam {payload.size}: {product['name']}"
+        chat["last_time"] = now_str
+        notified_chats.append({"chat_id": chat["id"], "customer_name": cust["name"]})
+
+    db.save_state_to_sqlite()
+    return {
+        "status": "success",
+        "sent_count": len(notified_chats),
+        "notified": notified_chats
+    }
 
 # --- WhatsApp Simulation ---
 
@@ -309,14 +598,13 @@ def simulate_incoming_message(payload: SimulationRequest):
     
     if payload.scenario == "charqueadas_bota":
         chat = next((c for c in db.CHATS if c["id"] == "CHAT-101"), None)
-        text = "Oi Mariana! Meu marido vai passar aí em Charqueadas também, tem o tênis casual 41?"
+        text = "Oi Mariana! Meu marido vai passar aí em Charqueadas também, tem o tênis casual 37 ou 40?"
         sender_name = "Juliana Silveira"
     elif payload.scenario == "patricia_novidade":
         chat = next((c for c in db.CHATS if c["id"] == "CHAT-102"), None)
         text = "Lucas, vi a jaqueta biker no stories! Consegue segurar o tamanho G pra mim até amanhã?"
         sender_name = "Patrícia Vargas"
     elif payload.scenario == "nova_cliente_rio_pardo":
-        # Create a new conversation
         new_cust_id = f"CUST-00{len(db.CUSTOMERS) + 1}"
         new_cust = {
             "id": new_cust_id,
@@ -353,7 +641,7 @@ def simulate_incoming_message(payload: SimulationRequest):
             "last_time": now_str,
             "messages": [
                 {
-                    "id": f"MSG-{int(now.timestamp() * 1000)}",
+                    "id": f"MSG-{int(now.timestamp() * 1000)}-{random.randint(10,99)}",
                     "sender": "customer",
                     "text": text,
                     "time": now_str,
@@ -362,6 +650,7 @@ def simulate_incoming_message(payload: SimulationRequest):
             ]
         }
         db.CHATS.insert(0, new_chat)
+        db.save_state_to_sqlite()
         return {"status": "success", "chat_id": new_chat_id, "message": text}
     else:
         chat = db.CHATS[0]
@@ -372,12 +661,13 @@ def simulate_incoming_message(payload: SimulationRequest):
     chat["last_message"] = text
     chat["last_time"] = now_str
     chat["messages"].append({
-        "id": f"MSG-{int(now.timestamp() * 1000)}",
+        "id": f"MSG-{int(now.timestamp() * 1000)}-{random.randint(10,99)}",
         "sender": "customer",
         "text": text,
         "time": now_str,
         "type": "text"
     })
+    db.save_state_to_sqlite()
     
     return {"status": "success", "chat_id": chat["id"], "message": text}
 
@@ -427,7 +717,8 @@ def get_dashboard_stats():
             "stores_connected": 5
         },
         "stores_ranking": sorted(store_metrics, key=lambda x: x["reservations_count"], reverse=True),
-        "shoe_size_demand": shoe_sizes
+        "shoe_size_demand": shoe_sizes,
+        "db_diagnostics": db.get_db_diagnostics()
     }
 
 # Mount frontend static directory
